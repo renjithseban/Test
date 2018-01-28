@@ -41,15 +41,15 @@ export function aStarSearch<Node> (
         public parentNode: SearchNode | undefined;		// * parentNode	: keeps the parent SearchNode of current node under search *
         public graphNode: Successor<Node> | undefined;	// * graphNode 	: keeps the corresponding graphNode of current node under search *
         public totalCost: number;						// * totalCost	: total cost to reach the current node under search	from start node *
-        public astarcost: number;					// * astarcost  : sum of totalCost and heuristic value of current node under search *
+        public astarcost: number;						// * astarcost  : sum of totalCost and heuristic value of current node under search *
 
         // * Constructor to computes the astarcost before adding a node to PriorityQueue *
-        constructor(parent: SearchNode | undefined, node: Successor<Node> | undefined, cost: number, heuristicCost: number) {
+        constructor(parent: SearchNode, node: Successor<Node> | undefined, cost: number) {
         	var curNode: Node = (node) ? node.child : start;	// ** Successor<Node> is undefined for start node **
             this.parentNode = parent;
             this.graphNode = node;
             this.totalCost = cost;
-            this.astarcost = this.totalCost + heuristicCost;
+            this.astarcost = this.totalCost + heuristics(curNode);
         }
     }
 
@@ -58,6 +58,11 @@ export function aStarSearch<Node> (
     compare = function(a: SearchNode, b: SearchNode) : number {
         if(a.astarcost > b.astarcost) return -1;
         if(a.astarcost < b.astarcost) return 1;
+
+        // * if astarcost are same, one with minimum heuristic value is kept on top of queue *
+
+        if((a.astarcost - a.totalCost) < (b.astarcost - b.totalCost)) return 1;	
+        if((a.astarcost - a.totalCost) > (b.astarcost - b.totalCost)) return -1;
         return 0;
     }
 
@@ -74,67 +79,46 @@ export function aStarSearch<Node> (
 
     // Variable declaration
     var currentSearchNode: SearchNode | undefined;	// * to keep the SearchNode dequeued from the PriorityQueue
-    var currentNode: Node = start;						// * to keep the GraphNode to currentSearchNode
-    var nodeDictionary: Dictionary<Node, SearchNode> = new Dictionary<Node,SearchNode>();	// * to keep track of visisted nodes
-    var heuristicDictionary: Dictionary<Node, number> = new Dictionary<Node, number>();
+    var currentNode: Node;							// * to keep the GraphNode to currentSearchNode
+    var nodeDictionary: Dictionary<Node, SearchNode | undefined> = new Dictionary<Node,SearchNode | undefined>();	// * to keep track of visisted nodes
     var endTime = Date.now() + timeout * 1000;
     var frontier : PriorityQueue<SearchNode> = new PriorityQueue<SearchNode>(compare); 
     var successors: Successor<Node>[] = [];
-    var visited : Set<Node> = new Set();
-    
 
-    heuristicDictionary.setValue(currentNode, heuristics(currentNode));
-    currentSearchNode = new SearchNode(undefined, undefined,0, heuristicDictionary.getValue(currentNode));
-    frontier.enqueue(currentSearchNode); // * specific to start node *
-    nodeDictionary.setValue(currentNode, currentSearchNode);
+    frontier.enqueue(new SearchNode(undefined, undefined,0)); // * specific to start node *
     
     // Searching begins here
     while(Date.now() < endTime) {
         currentSearchNode = frontier.dequeue();
-
         if(!currentSearchNode) {
-            return new SearchResult<Node>('failure', [], -1, visited.size() + frontier.size());
+            return new SearchResult<Node>('failure', [], -1, nodeDictionary.keys.length + frontier.size());
         }
-        currentNode = (currentSearchNode.graphNode) ? currentSearchNode.graphNode.child : start;
-        //nodeDictionary.remove(currentNode);
-        visited.add(currentNode);
+        if(currentSearchNode.graphNode){
+            currentNode = currentSearchNode.graphNode.child;
+            if(!nodeDictionary.containsKey(currentNode)){
+                nodeDictionary.setValue(currentNode, currentSearchNode); // * Add to dictionary if it's not already visisted *
+            }
+            else{
+                var val:SearchNode = nodeDictionary.getValue(currentNode);
+                if(val.astarcost > currentSearchNode.astarcost){
+                    nodeDictionary.setValue(currentNode, currentSearchNode); // * Update the value in dictionary if found another minimum cost path *
+                }
+            }
+        }
+        else{
+            currentNode = start;
+            nodeDictionary.setValue(start, undefined); // * Initialize the dictionary with start node *
+        }
 
         if(goal(currentNode)) {
-            return new SearchResult<Node>('success', path(currentNode), currentSearchNode.totalCost, visited.size() + frontier.size());
+            return new SearchResult<Node>('success', path(currentNode), currentSearchNode.totalCost, nodeDictionary.keys.length + frontier.size());
         }
-
-        //nodeDictionary.setValue(currentNode, newSearchNode);
-
         successors = graph.successors(currentNode);
-        var heuristicCost: number;
-        
         if(successors.length>0){
-        	for (var next of successors){
-        		if(visited.contains(next.child)){
-        			continue;
-        		}
-        		if(heuristicDictionary.containsKey(next.child)){
-            		heuristicCost = heuristicDictionary.getValue(next.child);
-        		}
-            	
-            	else {
-            		heuristicCost = heuristics(next.child);
-           			heuristicDictionary.setValue(next.child, heuristicCost);
-            	}
-
-            	if(!nodeDictionary.containsKey(next.child)){
-            		var newNextNode: SearchNode = new SearchNode(currentSearchNode,next,currentSearchNode.totalCost+next.cost, heuristicCost);
-            		frontier.enqueue(newNextNode);
-            		nodeDictionary.setValue(next.child, newNextNode);
-            	}
-            	else{
-            		if((currentSearchNode.totalCost + next.cost) < (nodeDictionary.getValue(next.child)).totalCost){
-            			var newNextNode: SearchNode = new SearchNode(currentSearchNode,next,currentSearchNode.totalCost+next.cost, heuristicCost);
-            			nodeDictionary.setValue(next.child, newNextNode);
-            		}
-            	}
-        	}
+            for (var next of successors){
+                frontier.enqueue(new SearchNode(currentSearchNode,next,currentSearchNode.totalCost+next.cost));
+            }
         }
     }
-    return new SearchResult<Node>('timeout', [], -1, visited.size() + frontier.size());
+    return new SearchResult<Node>('timeout', [], -1, nodeDictionary.keys().length+frontier.size());
 }
