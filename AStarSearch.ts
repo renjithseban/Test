@@ -14,8 +14,7 @@ You should change the function 'aStarSearch'.
 ********************************************************************************/
 
 /* A* search implementation, parameterised by a 'Node' type. 
- * The code here is just a template; you should rewrite this function entirely.
- * This template produces a dummy search result which is a random walk.
+ * The code here is just a template;
  *
  * Note that you should not change the API (type) of this function, only its body.
  *
