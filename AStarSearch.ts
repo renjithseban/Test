@@ -14,7 +14,8 @@ You should change the function 'aStarSearch'.
 ********************************************************************************/
 
 /* A* search implementation, parameterised by a 'Node' type. 
- * The code here is just a template;
+ * The code here is just a template; you should rewrite this function entirely.
+ * This template produces a dummy search result which is a random walk.
  *
  * Note that you should not change the API (type) of this function, only its body.
  *
@@ -37,26 +38,20 @@ export function aStarSearch<Node> (
 
     // Define a class to represent a search node
     class SearchNode {
-        public parentNode: SearchNode | undefined;		// * parentNode	: keeps the parent SearchNode of current node under search *
-        public graphNode: Successor<Node> | undefined;	// * graphNode 	: keeps the corresponding graphNode of current node under search *
-        public totalCost: number;						// * totalCost	: total cost to reach the current node under search	from start node *
-        public astarcost: number;					// * astarcost  : sum of totalCost and heuristic value of current node under search *
-
-        // * Constructor to computes the astarcost before adding a node to PriorityQueue *
-        constructor(parent: SearchNode | undefined, node: Successor<Node> | undefined, cost: number, heuristicCost: number) {
-        	var curNode: Node = (node) ? node.child : start;	// ** Successor<Node> is undefined for start node **
-            this.parentNode = parent;
-            this.graphNode = node;
-            this.totalCost = cost;
-            this.astarcost = this.totalCost + heuristicCost;
-        }
+       constructor( 
+            // undefined values are used only for the first search node (i.e. the start).
+            public parentNode    : SearchNode      | undefined, // parent search node
+            public graphNode      : Successor<Node> | undefined, // edge.child is current graph node
+            public totalCost : number,                      // total cost from start node
+            public heuristicCost : number,                      // total cost plus heuristics cost
+) {};
     }
 
     // * Define a compare function for PriorityQueue *
     var compare : (a: SearchNode, b: SearchNode) => number;
     compare = function(a: SearchNode, b: SearchNode) : number {
-        if(a.astarcost > b.astarcost) return -1;
-        if(a.astarcost < b.astarcost) return 1;
+        if((a.totalCost + a.heuristicCost) > (b.totalCost + b.heuristicCost)) return -1;
+        if((a.totalCost + a.heuristicCost) < (b.totalCost + b.heuristicCost)) return 1;
         return 0;
     }
 
@@ -75,15 +70,12 @@ export function aStarSearch<Node> (
     var currentSearchNode: SearchNode | undefined;	// * to keep the SearchNode dequeued from the PriorityQueue
     var currentNode: Node = start;						// * to keep the GraphNode to currentSearchNode
     var nodeDictionary: Dictionary<Node, SearchNode> = new Dictionary<Node,SearchNode>();	// * to keep track of visisted nodes
-    var heuristicDictionary: Dictionary<Node, number> = new Dictionary<Node, number>();
     var endTime = Date.now() + timeout * 1000;
     var frontier : PriorityQueue<SearchNode> = new PriorityQueue<SearchNode>(compare); 
     var successors: Successor<Node>[] = [];
     var visited : Set<Node> = new Set();
     
-
-    heuristicDictionary.setValue(currentNode, heuristics(currentNode));
-    currentSearchNode = new SearchNode(undefined, undefined,0, heuristicDictionary.getValue(currentNode));
+    currentSearchNode = new SearchNode(undefined, undefined,0, heuristics(start));
     frontier.enqueue(currentSearchNode); // * specific to start node *
     nodeDictionary.setValue(currentNode, currentSearchNode);
     
@@ -95,14 +87,11 @@ export function aStarSearch<Node> (
             return new SearchResult<Node>('failure', [], -1, visited.size() + frontier.size());
         }
         currentNode = (currentSearchNode.graphNode) ? currentSearchNode.graphNode.child : start;
-        //nodeDictionary.remove(currentNode);
         visited.add(currentNode);
 
         if(goal(currentNode)) {
             return new SearchResult<Node>('success', path(currentNode), currentSearchNode.totalCost, visited.size() + frontier.size());
         }
-
-        //nodeDictionary.setValue(currentNode, newSearchNode);
 
         successors = graph.successors(currentNode);
         var heuristicCost: number;
@@ -112,23 +101,16 @@ export function aStarSearch<Node> (
         		if(visited.contains(next.child)){
         			continue;
         		}
-        		if(heuristicDictionary.containsKey(next.child)){
-            		heuristicCost = heuristicDictionary.getValue(next.child);
-        		}
-            	
-            	else {
-            		heuristicCost = heuristics(next.child);
-           			heuristicDictionary.setValue(next.child, heuristicCost);
-            	}
 
             	if(!nodeDictionary.containsKey(next.child)){
-            		var newNextNode: SearchNode = new SearchNode(currentSearchNode,next,currentSearchNode.totalCost+next.cost, heuristicCost);
+            		var newNextNode: SearchNode = new SearchNode(currentSearchNode,next,currentSearchNode.totalCost+next.cost, heuristics(next.child));
             		frontier.enqueue(newNextNode);
             		nodeDictionary.setValue(next.child, newNextNode);
             	}
             	else{
-            		if((currentSearchNode.totalCost + next.cost) < (nodeDictionary.getValue(next.child)).totalCost){
-            			var newNextNode: SearchNode = new SearchNode(currentSearchNode,next,currentSearchNode.totalCost+next.cost, heuristicCost);
+            		var previousNode: SearchNode = nodeDictionary.getValue(next.child);
+            		if((currentSearchNode.totalCost + next.cost) < previousNode.totalCost){
+            			var newNextNode: SearchNode = new SearchNode(currentSearchNode,next,currentSearchNode.totalCost+next.cost, previousNode.heuristicCost);
             			nodeDictionary.setValue(next.child, newNextNode);
             		}
             	}
